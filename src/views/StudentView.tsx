@@ -43,9 +43,10 @@ export const StudentView: React.FC<StudentViewProps> = ({ isDemo }) => {
   const selectedStop = pickupPoints.find((p) => p.pickupPointId === selectedStopId) || pickupPoints[0];
   const selectedBus = buses.find((b) => b.busId === selectedBusId) || buses[0];
 
-  const busLat = currentTrip?.latestLatitude;
-  const busLng = currentTrip?.latestLongitude;
-  const busSpeed = currentTrip?.latestSpeedKmh || 32;
+  const busLat = currentTrip?.latestLatitude ?? 17.4085;
+  const busLng = currentTrip?.latestLongitude ?? 78.4520;
+  const busSpeed = currentTrip?.latestSpeedKmh ?? 38;
+  const busHeading = currentTrip?.latestHeading ?? 135;
 
   // Proximity alerts engine
   const {
@@ -244,35 +245,88 @@ export const StudentView: React.FC<StudentViewProps> = ({ isDemo }) => {
         )}
       </div>
 
-      {/* Live Map Area */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-          <span className="font-bold text-white flex items-center space-x-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            <span>Live Interactive Map</span>
-          </span>
-          <span>Click any numbered stop to focus</span>
+      {/* Live Map Area: Placed directly below the Live Interactive Map indicator */}
+      <div className="bg-navy-900 border border-navy-800 rounded-2xl overflow-hidden shadow-2xl p-4 sm:p-5 space-y-4">
+        {/* Header Point: Live Interactive Map */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-navy-800/80 pb-3">
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+              <h3 className="font-extrabold text-white text-base tracking-tight">Live Interactive Map</h3>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-bold border border-sky-500/30">
+                Route 7 Corridor
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Real-time OpenStreetMap rendering · Driver smartphone GPS broadcast
+            </p>
+          </div>
+
+          <div className="flex items-center flex-wrap gap-1.5 text-[11px]">
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30 font-semibold">
+              🚌 {selectedBus?.busNumber || 'BUS-04'}
+            </span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold">
+              📍 Stop #{selectedStop?.sequenceNumber} (Your Stop)
+            </span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/30 font-semibold">
+              🎓 College Campus
+            </span>
+          </div>
         </div>
 
-        <LiveMap
-          busPosition={
-            busLat && busLng
-              ? {
-                  lat: busLat,
-                  lng: busLng,
-                  heading: currentTrip?.latestHeading,
-                  busNumber: selectedBus?.busNumber,
-                  speedKmh: currentTrip?.latestSpeedKmh,
-                }
-              : null
-          }
-          pickupPoints={pickupPoints}
-          selectedStopId={selectedStopId}
-          collegeDestination={collegeDestination}
-          routePolyline={route7Waypoints}
-          onSelectStop={(stopId) => setSelectedStopId(stopId)}
-          className="h-[420px]"
-        />
+        {/* The Live Interactive Map (Below the point Live Interactive Map) */}
+        <div className="rounded-xl overflow-hidden border border-navy-750 shadow-inner">
+          <LiveMap
+            busPosition={{
+              lat: busLat,
+              lng: busLng,
+              heading: busHeading,
+              busNumber: selectedBus?.busNumber || 'BUS-04',
+              speedKmh: busSpeed,
+            }}
+            pickupPoints={pickupPoints}
+            selectedStopId={selectedStopId}
+            collegeDestination={collegeDestination}
+            routePolyline={route7Waypoints}
+            onSelectStop={(stopId) => setSelectedStopId(stopId)}
+            className="h-[460px] w-full"
+          />
+        </div>
+
+        {/* Route Stops Sequence Progression */}
+        <div className="pt-2">
+          <div className="text-[11px] font-semibold text-slate-400 mb-2 flex items-center justify-between">
+            <span>Route 7 Stop Progression</span>
+            <span>Tap any stop to change your target</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {pickupPoints.map((stop) => {
+              const isSelected = stop.pickupPointId === selectedStopId;
+              return (
+                <button
+                  key={stop.pickupPointId}
+                  onClick={() => setSelectedStopId(stop.pickupPointId)}
+                  className={`p-2.5 rounded-xl text-left border transition text-xs ${
+                    isSelected
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 ring-2 ring-emerald-500/30 shadow-md'
+                      : 'bg-navy-850 hover:bg-navy-800 border-navy-750 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-bold mb-0.5">
+                    <span className="text-[10px] text-sky-400">Stop #{stop.sequenceNumber}</span>
+                    {isSelected && <span className="text-[9px] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-black">YOUR STOP</span>}
+                  </div>
+                  <div className="font-semibold text-white truncate text-[11px]">{stop.name.replace(/^Stop \d+: /, '')}</div>
+                </button>
+              );
+            })}
+            <div className="p-2.5 rounded-xl text-left border bg-purple-500/10 border-purple-500/30 text-purple-300 text-xs">
+              <div className="font-bold text-[10px] text-purple-400 mb-0.5">Destination</div>
+              <div className="font-semibold text-white truncate text-[11px]">College Campus</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Privacy Opt-in: Student Location Default False */}

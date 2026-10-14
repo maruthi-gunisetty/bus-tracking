@@ -28,7 +28,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   collegeDestination,
   routePolyline = [],
   onSelectStop,
-  className = 'h-[400px]',
+  className = 'h-[440px]',
   autoCenterBus = true,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -40,44 +40,65 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   const routeLineRef = useRef<L.Polyline | null>(null);
   const [followBus, setFollowBus] = useState<boolean>(autoCenterBus);
 
-  const destLat = collegeDestination?.lat ?? 17.4085;
-  const destLng = collegeDestination?.lng ?? 78.4520;
+  const destLat = collegeDestination?.lat ?? 17.385044;
+  const destLng = collegeDestination?.lng ?? 78.486671;
+
+  const initialCenterRef = useRef<[number, number]>([
+    busPosition?.lat ?? destLat,
+    busPosition?.lng ?? destLng,
+  ]);
 
   // Initialize Leaflet Map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    // Center by default on campus corridor area
-    const initialCenter: [number, number] = [destLat, destLng];
-
     const map = L.map(mapContainerRef.current, {
-      center: initialCenter,
+      center: initialCenterRef.current,
       zoom: 13,
       zoomControl: false,
       attributionControl: false,
     });
 
-    // Sleek, high-contrast Voyager cartography tiles (zero cost, OSM based)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    // Standard OpenStreetMap tiles (universal compatibility)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      subdomains: 'abcd',
+      subdomains: ['a', 'b', 'c'],
     }).addTo(map);
 
-    // Attribution
-    L.control.attribution({ position: 'bottomright', prefix: '© OpenStreetMap · CARTO' }).addTo(map);
+    L.control.attribution({ position: 'bottomright', prefix: '© OpenStreetMap contributors' }).addTo(map);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     const stopsGroup = L.layerGroup().addTo(map);
     stopsLayerGroupRef.current = stopsGroup;
     mapRef.current = map;
 
+    // Invalidate size to guarantee tiles render properly even if layout settled after mount
+    const timer1 = setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
+
+    const timer2 = setTimeout(() => {
+      map.invalidateSize();
+    }, 500);
+
+    // Watch resize of map container
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    if (mapContainerRef.current) {
+      resizeObserver.observe(mapContainerRef.current);
+    }
+
     return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
     };
-  }, [destLat, destLng]);
+  }, []);
 
-  // Update Route Polyline
+  // Update Route Polyline & Initial Fit Bounds
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -89,13 +110,18 @@ export const LiveMap: React.FC<LiveMapProps> = ({
     if (routePolyline.length > 1) {
       routeLineRef.current = L.polyline(routePolyline, {
         color: '#0284c7',
-        weight: 4,
+        weight: 5,
         opacity: 0.85,
         lineJoin: 'round',
-        dashArray: undefined,
       }).addTo(mapRef.current);
+
+      // Fit bounds to full route on initial load if not actively tracking a bus
+      if (!followBus) {
+        const bounds = L.latLngBounds(routePolyline);
+        mapRef.current.fitBounds(bounds, { padding: [30, 30] });
+      }
     }
-  }, [routePolyline]);
+  }, [routePolyline, followBus]);
 
   // Update College Destination Marker and Geofence Circle
   useEffect(() => {
@@ -111,9 +137,9 @@ export const LiveMap: React.FC<LiveMapProps> = ({
         radius: collegeDestination.arrivalRadiusMeters,
         color: '#8b5cf6',
         fillColor: '#8b5cf6',
-        fillOpacity: 0.15,
+        fillOpacity: 0.18,
         weight: 2,
-        dashArray: '4, 4',
+        dashArray: '5, 5',
       }).addTo(mapRef.current);
     }
 
@@ -122,9 +148,9 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       html: `
         <div class="flex flex-col items-center -translate-x-1/2 -translate-y-1/2">
           <div class="px-2 py-0.5 rounded bg-purple-900/90 text-purple-200 border border-purple-500 text-[10px] font-bold shadow-md whitespace-nowrap mb-1">
-            🎓 ${collegeDestination.name.split(' ')[0]}
+            🎓 Campus Destination
           </div>
-          <div class="w-6 h-6 rounded-full bg-purple-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-xs">
+          <div class="w-7 h-7 rounded-full bg-purple-600 border-2 border-white shadow-xl flex items-center justify-center text-white text-xs font-bold">
             ★
           </div>
         </div>
@@ -160,7 +186,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
               ${stop.name}
             </div>
             <div class="relative flex items-center justify-center">
-              ${isSelected ? '<span class="absolute w-8 h-8 rounded-full bg-emerald-400/30 animate-ping"></span>' : ''}
+              ${isSelected ? '<span class="absolute w-8 h-8 rounded-full bg-emerald-400/40 animate-ping"></span>' : ''}
               <div class="w-6 h-6 rounded-full ${
                 isSelected ? 'bg-emerald-500 text-white border-2 border-white' : 'bg-navy-800 text-sky-400 border border-sky-400'
               } shadow-lg flex items-center justify-center font-bold text-[11px]">
@@ -209,7 +235,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       html: `
         <div class="flex flex-col items-center -translate-x-1/2 -translate-y-1/2">
           <!-- Floating Tag -->
-          <div class="px-2 py-0.5 rounded-full bg-sky-600 text-white font-extrabold text-[11px] shadow-lg border border-sky-300 flex items-center space-x-1 mb-1 whitespace-nowrap">
+          <div class="px-2.5 py-0.5 rounded-full bg-sky-600 text-white font-extrabold text-[11px] shadow-xl border border-sky-300 flex items-center space-x-1 mb-1 whitespace-nowrap">
             <span>🚌 ${busNum}</span>
             <span class="text-[9px] opacity-90">· ${speed}</span>
           </div>
@@ -221,7 +247,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
             
             <!-- Rotating Pointer Vehicle -->
             <div 
-              class="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-600 to-blue-500 border-2 border-white shadow-xl flex items-center justify-center text-white"
+              class="w-9 h-9 rounded-full bg-gradient-to-tr from-sky-600 to-blue-500 border-2 border-white shadow-2xl flex items-center justify-center text-white"
               style="transform: rotate(${headingDeg}deg); transition: transform 0.4s ease;"
             >
               <svg class="w-4 h-4 fill-white" viewBox="0 0 24 24">
@@ -266,9 +292,16 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   };
 
   return (
-    <div className={`relative rounded-2xl overflow-hidden border border-navy-800 shadow-xl ${className}`}>
+    <div
+      className={`relative rounded-2xl overflow-hidden border border-navy-800 shadow-xl ${className}`}
+      style={{ minHeight: '440px' }}
+    >
       {/* Map Canvas */}
-      <div ref={mapContainerRef} className="w-full h-full min-h-[300px]" />
+      <div
+        ref={mapContainerRef}
+        style={{ width: '100%', height: '100%', minHeight: '440px' }}
+        className="w-full h-full"
+      />
 
       {/* Floating Map Controls */}
       <div className="absolute top-3 right-3 z-[1000] flex flex-col space-y-2">
