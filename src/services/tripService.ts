@@ -12,6 +12,12 @@ import { db, isFirebaseConfigured } from '../firebase/config';
 import type { Trip, TripStatus, RecoveryState } from '../types';
 import { INITIAL_COLLEGE } from '../config/routeData';
 import { calculateHaversineDistance } from '../utils/haversine';
+import {
+  publishDriverLocation,
+  subscribeToDriverLocation,
+  endDriverTripInSupabase,
+  type DriverLocationPayload,
+} from './supabaseTrackingService';
 
 // In-memory fallback event listeners for offline & demo modes
 type TripListener = (trip: Trip | null) => void;
@@ -21,7 +27,7 @@ const tripSubscribers = new Map<string, Set<TripListener>>();
 const activeTripsSubscribers = new Set<MultiTripsListener>();
 
 // Initial in-memory active trip for demonstration
-let memoryTrips: Map<string, Trip> = new Map([
+const memoryTrips: Map<string, Trip> = new Map([
   [
     'trip_demo_04',
     {
@@ -36,14 +42,14 @@ let memoryTrips: Map<string, Trip> = new Map([
       startTime: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
       endTime: null,
       latestLatitude: 17.4085,
-      latestLongitude: 17.4520,
+      latestLongitude: 78.4520,
       latestAccuracyMeters: 12,
       latestSpeedKmh: 38,
       latestHeading: 135,
       lastLocationUpdate: new Date().toISOString(),
       distanceToCollegeMeters: calculateHaversineDistance(
         17.4085,
-        17.4520,
+        78.4520,
         INITIAL_COLLEGE.lat,
         INITIAL_COLLEGE.lng
       ),
@@ -102,6 +108,24 @@ export async function startTrip(params: {
     ),
   };
 
+  // Broadcast to Supabase Realtime
+  void publishDriverLocation({
+    tripId,
+    busId: newTrip.busId,
+    busNumber: newTrip.busNumber,
+    driverId: newTrip.driverId,
+    driverName: newTrip.driverName,
+    routeId: newTrip.routeId,
+    latitude: newTrip.latestLatitude ?? 17.4385,
+    longitude: newTrip.latestLongitude ?? 78.4420,
+    accuracyMeters: newTrip.latestAccuracyMeters,
+    speedKmh: newTrip.latestSpeedKmh,
+    heading: newTrip.latestHeading,
+    status: newTrip.status,
+    timestamp: nowIso,
+    distanceToCollegeMeters: newTrip.distanceToCollegeMeters,
+  });
+
   if (isFirebaseConfigured() && db) {
     try {
       await setDoc(doc(db, 'trips', tripId), newTrip);
@@ -116,6 +140,12 @@ export async function startTrip(params: {
 
   memoryTrips.set(tripId, newTrip);
   notifyTripSubscribers(newTrip);
+
+  if (tripId !== 'trip_demo_04') {
+    const demoMirror: Trip = { ...newTrip, tripId: 'trip_demo_04' };
+    memoryTrips.set('trip_demo_04', demoMirror);
+    notifyTripSubscribers(demoMirror);
+  }
   return tripId;
 }
 
@@ -166,6 +196,30 @@ export async function updateTripTelemetry(
   memoryTrips.set(tripId, updated);
   notifyTripSubscribers(updated);
 
+  if (tripId !== 'trip_demo_04') {
+    const demoMirror: Trip = { ...updated, tripId: 'trip_demo_04' };
+    memoryTrips.set('trip_demo_04', demoMirror);
+    notifyTripSubscribers(demoMirror);
+  }
+
+  // Publish to Supabase Realtime channel & database
+  void publishDriverLocation({
+    tripId,
+    busId: updated.busId,
+    busNumber: updated.busNumber,
+    driverId: updated.driverId,
+    driverName: updated.driverName,
+    routeId: updated.routeId,
+    latitude: telemetry.latitude,
+    longitude: telemetry.longitude,
+    accuracyMeters: updated.latestAccuracyMeters,
+    speedKmh: updated.latestSpeedKmh,
+    heading: updated.latestHeading,
+    status: updated.status,
+    timestamp: nowIso,
+    distanceToCollegeMeters: distanceToCollege,
+  });
+
   if (isFirebaseConfigured() && db) {
     try {
       await updateDoc(doc(db, 'trips', tripId), {
@@ -197,6 +251,13 @@ export async function endTrip(tripId: string, busId?: string): Promise<void> {
     existing.endTime = nowIso;
     existing.recoveryState = null;
     notifyTripSubscribers(existing);
+
+    void endDriverTripInSupabase(
+      tripId,
+      existing.busId,
+      existing.busNumber,
+      existing.driverId
+    );
   }
 
   if (isFirebaseConfigured() && db) {
@@ -227,10 +288,37 @@ export function subscribeToTrip(tripId: string, onUpdate: TripListener): Unsubsc
     onUpdate({ ...memoryTrips.get(tripId)! });
   }
 
+  // Subscribe to Supabase Realtime updates
+  const unsubSupabase = subscribeToDriverLocation(tripId, (payload: DriverLocationPayload) => {
+    const existing = memoryTrips.get(tripId);
+    const updatedTrip: Trip = {
+      ...(existing || {
+        tripId: payload.tripId,
+        busId: payload.busId,
+        busNumber: payload.busNumber,
+        driverId: payload.driverId,
+        driverName: payload.driverName || 'Driver',
+        routeId: payload.routeId || 'route_07',
+        startTime: payload.timestamp,
+      }),
+      latestLatitude: payload.latitude,
+      latestLongitude: payload.longitude,
+      latestAccuracyMeters: payload.accuracyMeters ?? existing?.latestAccuracyMeters ?? 10,
+      latestSpeedKmh: payload.speedKmh ?? existing?.latestSpeedKmh ?? 0,
+      latestHeading: payload.heading ?? existing?.latestHeading ?? 0,
+      status: payload.status,
+      lastLocationUpdate: payload.timestamp,
+      distanceToCollegeMeters: payload.distanceToCollegeMeters ?? existing?.distanceToCollegeMeters,
+    };
+    memoryTrips.set(tripId, updatedTrip);
+    onUpdate(updatedTrip);
+  });
+
+  let unsubFirestore: Unsubscribe = () => {};
   if (isFirebaseConfigured() && db) {
     try {
       const tripRef = doc(db, 'trips', tripId);
-      return onSnapshot(
+      unsubFirestore = onSnapshot(
         tripRef,
         (snapshot) => {
           if (snapshot.exists()) {
@@ -262,6 +350,8 @@ export function subscribeToTrip(tripId: string, onUpdate: TripListener): Unsubsc
 
   return () => {
     set.delete(onUpdate);
+    unsubSupabase();
+    unsubFirestore();
   };
 }
 
@@ -274,10 +364,40 @@ export function subscribeToActiveTrips(onUpdate: MultiTripsListener): Unsubscrib
   );
   onUpdate(allActive);
 
+  // Subscribe to Supabase Realtime fleet updates
+  const unsubSupabase = subscribeToDriverLocation(null, (payload: DriverLocationPayload) => {
+    const existing = memoryTrips.get(payload.tripId);
+    const updatedTrip: Trip = {
+      ...(existing || {
+        tripId: payload.tripId,
+        busId: payload.busId,
+        busNumber: payload.busNumber,
+        driverId: payload.driverId,
+        driverName: payload.driverName || 'Driver',
+        routeId: payload.routeId || 'route_07',
+        startTime: payload.timestamp,
+      }),
+      latestLatitude: payload.latitude,
+      latestLongitude: payload.longitude,
+      latestAccuracyMeters: payload.accuracyMeters ?? existing?.latestAccuracyMeters ?? 10,
+      latestSpeedKmh: payload.speedKmh ?? existing?.latestSpeedKmh ?? 0,
+      latestHeading: payload.heading ?? existing?.latestHeading ?? 0,
+      status: payload.status,
+      lastLocationUpdate: payload.timestamp,
+      distanceToCollegeMeters: payload.distanceToCollegeMeters ?? existing?.distanceToCollegeMeters,
+    };
+    memoryTrips.set(payload.tripId, updatedTrip);
+    const currentActive = Array.from(memoryTrips.values()).filter(
+      (t) => t.status === 'ACTIVE' || t.status === 'STARTING' || t.status === 'ARRIVED'
+    );
+    onUpdate(currentActive);
+  });
+
+  let unsubFirestore: Unsubscribe = () => {};
   if (isFirebaseConfigured() && db) {
     try {
       const q = query(collection(db, 'trips'), where('status', 'in', ['ACTIVE', 'STARTING', 'ARRIVED']));
-      return onSnapshot(
+      unsubFirestore = onSnapshot(
         q,
         (snapshot) => {
           const trips: Trip[] = [];
@@ -299,5 +419,7 @@ export function subscribeToActiveTrips(onUpdate: MultiTripsListener): Unsubscrib
   activeTripsSubscribers.add(onUpdate);
   return () => {
     activeTripsSubscribers.delete(onUpdate);
+    unsubSupabase();
+    unsubFirestore();
   };
 }

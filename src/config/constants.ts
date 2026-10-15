@@ -11,7 +11,7 @@ export const GPS_CONFIG = {
 };
 
 export const DEFAULT_COLLEGE: CollegeDestination = {
-  name: "Anshary Engineering College Campus",
+  name: "Gothami College Campus",
   lat: 17.385044,
   lng: 78.486671,
   arrivalRadiusMeters: 150, // 150 meters arrival geofence

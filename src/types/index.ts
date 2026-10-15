@@ -75,21 +75,59 @@ export interface Trip {
   distanceToCollegeMeters?: number;
 }
 
-export interface StudentSubscription {
+export interface StudentRecord {
+  id: string;
   studentId: string;
-  busId: string;
+  fullName: string;
+  regNumber: string;
+  loginIdentifier: string;
+  assignedBusId: string;
+  assignedBusNumber: string;
+  assignedRouteId: string;
   pickupPointId: string;
-  notificationsEnabled: boolean;
-  alertThresholdsKm: number[]; // e.g. [5, 3, 2, 1, 0.2]
-  updatedAt?: string;
+  pickupPointName: string;
+  accountStatus: 'ACTIVE' | 'DEACTIVATED';
+  createdAt: string;
 }
 
-export interface AlertEvent {
-  eventId: string; // studentId_tripId_threshold
-  studentId: string;
-  tripId: string;
-  pickupPointId: string;
-  thresholdKm: number;
-  message: string;
-  triggeredAt: string;
+export interface DriverRecord {
+  id: string;
+  driverId: string;
+  fullName: string;
+  loginIdentifier: string;
+  phone: string;
+  licenseNumber: string;
+  assignedBusId: string;
+  assignedBusNumber: string;
+  assignedRouteId: string;
+  accountStatus: 'ACTIVE' | 'DEACTIVATED';
+  currentTripStatus: TripStatus;
+  createdAt: string;
 }
+
+export interface AuditLogEvent {
+  eventId: string;
+  actor: string;
+  actorRole: UserRole;
+  action: string;
+  affectedRecord: string;
+  details: string;
+  timestamp: string;
+}
+
+export interface AdminSettings {
+  collegeName: string;
+  destinationLat: number;
+  destinationLng: number;
+  arrivalRadiusMeters: number;
+  defaultThresholdsKm: number[];
+  allowBackgroundGpsNote: boolean;
+  operationalStatus: 'ACTIVE' | 'MAINTENANCE';
+}
+
+export interface AuthState {
+  user: AppUser | null;
+  role: UserRole | null;
+  isAuthenticated: boolean;
+}
+

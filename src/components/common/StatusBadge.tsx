@@ -18,29 +18,24 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 }) => {
   const configs = {
     ok: {
-      bg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400',
-      icon: <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 shrink-0" />,
-      dot: 'bg-emerald-400',
+      bg: 'bg-status-success/10 text-status-success border border-status-success/20',
+      icon: <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 shrink-0" strokeWidth={2} />,
     },
     warning: {
-      bg: 'bg-amber-500/15 border-amber-500/40 text-amber-400',
-      icon: <AlertTriangle className="w-3.5 h-3.5 mr-1.5 shrink-0" />,
-      dot: 'bg-amber-400',
+      bg: 'bg-status-warning/10 text-status-warning border border-status-warning/20',
+      icon: <AlertTriangle className="w-3.5 h-3.5 mr-1.5 shrink-0" strokeWidth={2} />,
     },
     error: {
-      bg: 'bg-rose-500/15 border-rose-500/40 text-rose-400',
-      icon: <AlertCircle className="w-3.5 h-3.5 mr-1.5 shrink-0" />,
-      dot: 'bg-rose-400',
+      bg: 'bg-status-error/10 text-status-error border border-status-error/20',
+      icon: <AlertCircle className="w-3.5 h-3.5 mr-1.5 shrink-0" strokeWidth={2} />,
     },
     info: {
-      bg: 'bg-sky-500/15 border-sky-500/40 text-sky-400',
-      icon: <Info className="w-3.5 h-3.5 mr-1.5 shrink-0" />,
-      dot: 'bg-sky-400',
+      bg: 'bg-status-info/10 text-status-info border border-status-info/20',
+      icon: <Info className="w-3.5 h-3.5 mr-1.5 shrink-0" strokeWidth={2} />,
     },
     stale: {
-      bg: 'bg-amber-500/20 border-amber-500/50 text-amber-300',
-      icon: <Clock className="w-3.5 h-3.5 mr-1.5 shrink-0" />,
-      dot: 'bg-amber-300',
+      bg: 'bg-slate-100 text-slate-600 border border-slate-200',
+      icon: <Clock className="w-3.5 h-3.5 mr-1.5 shrink-0" strokeWidth={2} />,
     },
   };
 
@@ -48,7 +43,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide border ${current.bg} ${
+      className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold tracking-tight ${current.bg} ${
         pulse ? 'animate-pulse' : ''
       } ${className}`}
     >

@@ -3,7 +3,7 @@ import { DEFAULT_COLLEGE } from './constants';
 
 export const INITIAL_COLLEGE: CollegeDestination = {
   ...DEFAULT_COLLEGE,
-  name: "Anshary Engineering College Campus",
+  name: "Gothami College Campus",
   lat: 17.385044,
   lng: 78.486671,
   arrivalRadiusMeters: 150,
@@ -13,7 +13,7 @@ export const INITIAL_ROUTE: BusRoute = {
   routeId: 'route_07',
   routeName: 'Route 7 - Downtown & Central Ring',
   startPoint: 'Central Station Terminal',
-  endPoint: 'Anshary Engineering College Campus',
+  endPoint: 'Gothami College Campus',
   color: '#0284c7', // Sky 600
   active: true,
 };
